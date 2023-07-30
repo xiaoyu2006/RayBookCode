@@ -12,10 +12,12 @@ use std::rc::Rc;
 
 use camera::Camera;
 use color::Color;
-use object::{Lambertian, Metal, Sphere};
+use object::{Lambertian, Metal, Dielectric, Sphere};
 use ray::Ray;
 use render::render;
 use vec3::Vec3;
+
+use crate::hit::HittableList;
 
 fn main() {
     // Image
@@ -33,7 +35,7 @@ fn main() {
     let camera = Camera::new(viewport_height, viewport_width, focal_length);
 
     // Objects
-    let mut world = hit::HittableList::new();
+    let mut world = HittableList::new();
 
     let material_ground = Lambertian {
         albedo: Color {
@@ -42,12 +44,15 @@ fn main() {
             z: 0.0,
         },
     };
-    let material_center = Lambertian {
-        albedo: Color {
-            x: 0.7,
-            y: 0.3,
-            z: 0.3,
-        },
+    // let material_center = Lambertian {
+    //     albedo: Color {
+    //         x: 0.7,
+    //         y: 0.3,
+    //         z: 0.3,
+    //     },
+    // };
+    let material_center = Dielectric {
+        ir: 1.5,
     };
     let material_left = Metal {
         albedo: Color {
