@@ -1,3 +1,13 @@
+use crate::render::render;
+use std::rc::Rc;
+
+use camera::Camera;
+use color::Color;
+use hit::HittableList;
+use object::{Dielectric, Lambertian, Metal, Sphere};
+use util::{random_double, random_double_range};
+use vec3::Vec3;
+
 pub mod camera;
 pub mod color;
 pub mod hit;
@@ -8,113 +18,172 @@ pub mod render;
 pub mod util;
 pub mod vec3;
 
-use std::rc::Rc;
+fn random_scene() -> HittableList {
+    let mut world = HittableList::new();
 
-use camera::Camera;
-use color::Color;
-use object::{Lambertian, Metal, Dielectric, Sphere};
-use ray::Ray;
-use render::render;
-use vec3::Vec3;
+    let ground_material = Rc::new(Lambertian {
+        albedo: Color {
+            x: 0.5,
+            y: 0.5,
+            z: 0.5,
+        },
+    });
+    world.add(Box::new(Sphere {
+        center: Vec3 {
+            x: 0.0,
+            y: -1000.0,
+            z: 0.0,
+        },
+        radius: 1000.0,
+        material: ground_material,
+    }));
 
-use crate::hit::HittableList;
+    for a in -11..11 {
+        for b in -11..11 {
+            let choose_mat = random_double();
+            let center = Vec3 {
+                x: a as f64 + 0.9 * random_double(),
+                y: 0.2,
+                z: b as f64 + 0.9 * random_double(),
+            };
+
+            if (&center
+                - &Vec3 {
+                    x: 4.0,
+                    y: 0.2,
+                    z: 0.0,
+                })
+                .length()
+                > 0.9
+            {
+                let sphere_material: Rc<dyn material::Material>;
+                if choose_mat < 0.8 {
+                    // diffuse
+                    let albedo = &Vec3::random() * &Vec3::random();
+                    sphere_material = Rc::new(Lambertian { albedo });
+                    world.add(Box::new(Sphere {
+                        center,
+                        radius: 0.2,
+                        material: sphere_material,
+                    }));
+                } else if choose_mat < 0.95 {
+                    // metal
+                    let albedo = Vec3::random_range(0.5, 1.0);
+                    let fuzz = random_double_range(0.0, 0.5);
+                    sphere_material = Rc::new(Metal { albedo, fuzz });
+                    world.add(Box::new(Sphere {
+                        center,
+                        radius: 0.2,
+                        material: sphere_material,
+                    }));
+                } else {
+                    // glass
+                    sphere_material = Rc::new(Dielectric { ir: 1.5 });
+                    world.add(Box::new(Sphere {
+                        center,
+                        radius: 0.2,
+                        material: sphere_material,
+                    }));
+                }
+            }
+        }
+    }
+
+    let material1 = Rc::new(Dielectric { ir: 1.5 });
+    world.add(Box::new(Sphere {
+        center: Vec3 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: material1,
+    }));
+
+    let material2 = Rc::new(Lambertian {
+        albedo: Color {
+            x: 0.4,
+            y: 0.2,
+            z: 0.1,
+        },
+    });
+    world.add(Box::new(Sphere {
+        center: Vec3 {
+            x: -4.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: material2,
+    }));
+
+    let material3 = Rc::new(Metal {
+        albedo: Color {
+            x: 0.7,
+            y: 0.6,
+            z: 0.5,
+        },
+        fuzz: 0.0,
+    });
+    world.add(Box::new(Sphere {
+        center: Vec3 {
+            x: 4.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        radius: 1.0,
+        material: material3,
+    }));
+
+    world
+}
 
 fn main() {
     // Image
-    const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 600;
-    const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 50;
-    const GAMMA: f64 = 1.8;
+    let aspect_ratio = 3.0 / 2.0;
+    let img_width = 1200;
+    let img_height = (img_width as f64 / aspect_ratio) as i32;
+    let samples_per_pixel = 50;
+    let gamma = 2.0;
+
+    // World
+    let world = random_scene();
 
     // Camera
-    let viewport_height = 2.0;
-    let viewport_width = ASPECT_RATIO * viewport_height;
-    let focal_length = 1.0;
-
-    let camera = Camera::new(viewport_height, viewport_width, focal_length);
-
-    // Objects
-    let mut world = HittableList::new();
-
-    let material_ground = Lambertian {
-        albedo: Color {
-            x: 0.8,
-            y: 0.8,
-            z: 0.0,
-        },
+    let lookfrom = Vec3 {
+        x: 13.0,
+        y: 2.0,
+        z: 3.0,
     };
-    // let material_center = Lambertian {
-    //     albedo: Color {
-    //         x: 0.7,
-    //         y: 0.3,
-    //         z: 0.3,
-    //     },
-    // };
-    let material_center = Dielectric {
-        ir: 1.5,
+    let lookat = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
     };
-    let material_left = Metal {
-        albedo: Color {
-            x: 0.8,
-            y: 0.8,
-            z: 0.8,
-        },
-        fuzz: 0.3,
+    let vup = Vec3 {
+        x: 0.0,
+        y: 1.0,
+        z: 0.0,
     };
-    let material_right = Metal {
-        albedo: Color {
-            x: 0.8,
-            y: 0.6,
-            z: 0.2,
-        },
-        fuzz: 1.0,
-    };
-
-    world.add(Box::new(Sphere {
-        center: Vec3 {
-            x: 0.0,
-            y: -100.5,
-            z: -1.0,
-        },
-        radius: 100.0,
-        material: Rc::new(material_ground),
-    }));
-    world.add(Box::new(Sphere {
-        center: Vec3 {
-            x: 0.0,
-            y: 0.0,
-            z: -1.0,
-        },
-        radius: 0.5,
-        material: Rc::new(material_center),
-    }));
-    world.add(Box::new(Sphere {
-        center: Vec3 {
-            x: -1.0,
-            y: 0.0,
-            z: -1.0,
-        },
-        radius: 0.5,
-        material: Rc::new(material_left),
-    }));
-    world.add(Box::new(Sphere {
-        center: Vec3 {
-            x: 1.0,
-            y: 0.0,
-            z: -1.0,
-        },
-        radius: 0.5,
-        material: Rc::new(material_right),
-    }));
+    let dist_to_focus = 10.0;
+    let aperture = 0.1;
+    let camera = Camera::new(
+        lookfrom,
+        lookat,
+        vup,
+        20.0,
+        aspect_ratio,
+        aperture,
+        dist_to_focus,
+    );
 
     // Render
     render(
-        IMAGE_WIDTH,
-        IMAGE_HEIGHT,
+        img_width,
+        img_height,
         camera,
         world,
-        GAMMA,
-        SAMPLES_PER_PIXEL,
+        gamma,
+        samples_per_pixel,
     );
 }

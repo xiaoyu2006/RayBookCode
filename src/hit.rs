@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{material::Material, vec3::dot, Ray, Vec3};
+use crate::{material::Material, vec3::dot, ray::Ray, Vec3};
 
 pub struct HitRecord {
     pub p: Vec3,                    // Point where ray hits object

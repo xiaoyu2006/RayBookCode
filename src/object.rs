@@ -4,7 +4,7 @@ use crate::color::Color;
 use crate::hit::{HitRecord, Hittable};
 use crate::material::Material;
 use crate::ray::Ray;
-use crate::util::{reflect, refract, reflectance, random_double};
+use crate::util::{random_double, reflect, reflectance, refract};
 use crate::vec3::{dot, Vec3};
 
 pub struct Sphere {
@@ -114,11 +114,12 @@ impl Material for Dielectric {
 
         let cannot_refract = refraction_ratio * sin_theta > 1.0;
 
-        let direction = if cannot_refract || reflectance(cos_theta, refraction_ratio) > random_double() {
-            reflect(&unit_direction, &rec.normal)
-        } else {
-            refract(&unit_direction, &rec.normal, refraction_ratio)
-        };
+        let direction =
+            if cannot_refract || reflectance(cos_theta, refraction_ratio) > random_double() {
+                reflect(&unit_direction, &rec.normal)
+            } else {
+                refract(&unit_direction, &rec.normal, refraction_ratio)
+            };
 
         let scattered = Ray {
             origin: rec.p.clone(),
